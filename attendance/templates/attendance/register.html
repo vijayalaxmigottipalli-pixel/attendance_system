@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register Student</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        body {
+            background: linear-gradient(-45deg, #4c1d95, #7e22ce, #db2777, #f97316);
+            background-size: 400% 400%;
+            animation: gradientShift 18s ease infinite;
+            min-height: 100vh;
+        }
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: rise 0.5s ease forwards; }
+        @keyframes cardGlow {
+            0%, 100% {
+                box-shadow: 0 0 30px 4px rgba(124, 58, 237, 0.45),
+                            0 0 60px 10px rgba(219, 39, 119, 0.25);
+            }
+            50% {
+                box-shadow: 0 0 45px 8px rgba(249, 115, 22, 0.45),
+                            0 0 80px 16px rgba(124, 58, 237, 0.3);
+            }
+        }
+        .card-glow { animation: cardGlow 6s ease-in-out infinite; }
+        #neuralCanvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .card-glow, body { animation: none !important; }
+        }
+    </style>
+</head>
+<body class="min-h-screen relative">
+    <canvas id="neuralCanvas"></canvas>
+
+    <!-- Nav -->
+    <nav class="bg-gray-900/80 backdrop-blur sticky top-0 z-10 relative">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 py-3 grid grid-cols-3 items-center">
+            <div></div>
+            <a href="/" class="text-white font-bold text-2xl sm:text-3xl tracking-tight text-center">Attendance System</a>
+            <div class="flex flex-wrap justify-end gap-x-5 gap-y-1 text-sm">
+                <a href="/register/" class="text-white font-semibold">Register</a>
+                <a href="/recognize/" class="text-indigo-200 hover:text-white transition">Mark Attendance</a>
+                <a href="/report/" class="text-indigo-200 hover:text-white transition">Report</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-xl mx-auto px-4 sm:px-6 py-10 sm:py-16 relative z-10">
+        <div class="card-glow bg-white/25 backdrop-blur-xl border border-white/40 rounded-2xl p-6 sm:p-10 fade-in">
+
+            <h1 class="text-2xl sm:text-3xl font-bold text-white text-center mb-6">Register Student</h1>
+
+            {% if error %}
+                <p class="bg-red-500/20 border border-red-300/40 text-white text-sm rounded-lg px-4 py-3 text-center mb-4">
+                    {{ error }}
+                </p>
+            {% endif %}
+
+            <form method="POST" class="space-y-4">
+                {% csrf_token %}
+                <input type="text" name="name" placeholder="Full Name" required
+                       value="{{ name|default:'' }}"
+                       class="w-full px-4 py-3 rounded-xl bg-white/70 placeholder-gray-500 text-gray-900 border border-white/50 focus:outline-none focus:ring-2 focus:ring-white/70">
+
+                <div>
+                    <label class="block text-white/90 text-sm font-medium mb-1.5">Roll Number</label>
+                    <input type="text" name="roll_number" placeholder="{{ roll_example }}"
+                           value="{{ roll_number|default:'' }}"
+                           required
+                           maxlength="15"
+                           pattern="\d{2}B91[A-Za-z0-9]{4,6}"
+                           title="Format: {{ roll_example }} (2-digit year + B91 + your ID)"
+                           style="text-transform: uppercase;"
+                           class="w-full px-4 py-3 rounded-xl bg-white/70 placeholder-gray-500 text-gray-900 border border-white/50 focus:outline-none focus:ring-2 focus:ring-white/70">
+                    <p class="text-white/70 text-xs mt-1.5">Format: {{ roll_example }} (2-digit year + B91 + your ID)</p>
+                </div>
+
+                <button type="submit"
+                        class="w-full bg-white text-indigo-700 font-semibold py-3 rounded-xl transition shadow-md hover:shadow-lg hover:-translate-y-0.5 hover:bg-indigo-50">
+                    Register &amp; Continue to Face Capture
+                </button>
+            </form>
+
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('neuralCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height, particles;
+
+        const PARTICLE_COUNT = 70;
+        const MAX_DIST = 130;
+        const SPEED = 0.35;
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function initParticles() {
+            particles = Array.from({ length: PARTICLE_COUNT }, () => ({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                vx: (Math.random() - 0.5) * SPEED,
+                vy: (Math.random() - 0.5) * SPEED,
+            }));
+        }
+        initParticles();
+
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        function drawFrame() {
+            ctx.clearRect(0, 0, width, height);
+
+            for (const p of particles) {
+                if (!prefersReducedMotion) {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    if (p.x < 0 || p.x > width) p.vx *= -1;
+                    if (p.y < 0 || p.y > height) p.vy *= -1;
+                }
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255,255,255,0.65)';
+                ctx.fill();
+            }
+
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const a = particles[i], b = particles[j];
+                    const dx = a.x - b.x, dy = a.y - b.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < MAX_DIST) {
+                        ctx.beginPath();
+                        ctx.moveTo(a.x, a.y);
+                        ctx.lineTo(b.x, b.y);
+                        ctx.strokeStyle = `rgba(255,255,255,${0.25 * (1 - dist / MAX_DIST)})`;
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            if (!prefersReducedMotion) {
+                requestAnimationFrame(drawFrame);
+            }
+        }
+
+        drawFrame();
+    </script>
+</body>
+</html>

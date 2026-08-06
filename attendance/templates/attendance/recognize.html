@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mark Attendance</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        body {
+            background: linear-gradient(-45deg, #4c1d95, #7e22ce, #db2777, #f97316);
+            background-size: 400% 400%;
+            animation: gradientShift 18s ease infinite;
+            min-height: 100vh;
+        }
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: rise 0.5s ease forwards; }
+        @keyframes cardGlow {
+            0%, 100% {
+                box-shadow: 0 0 30px 4px rgba(124, 58, 237, 0.45),
+                            0 0 60px 10px rgba(219, 39, 119, 0.25);
+            }
+            50% {
+                box-shadow: 0 0 45px 8px rgba(249, 115, 22, 0.45),
+                            0 0 80px 16px rgba(124, 58, 237, 0.3);
+            }
+        }
+        .card-glow { animation: cardGlow 6s ease-in-out infinite; }
+
+        @keyframes pulseOnce {
+            0%   { transform: scale(1); }
+            40%  { transform: scale(1.03); }
+            100% { transform: scale(1); }
+        }
+        #status-banner.granted { animation: pulseOnce 0.4s ease; }
+
+        #neuralCanvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .card-glow, body, #status-banner.granted { animation: none !important; }
+        }
+    </style>
+</head>
+<body class="min-h-screen relative">
+    <canvas id="neuralCanvas"></canvas>
+
+    <!-- Nav -->
+    <nav class="bg-gray-900/80 backdrop-blur sticky top-0 z-10 relative">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 py-3 grid grid-cols-3 items-center">
+            <div></div>
+            <a href="/" class="text-white font-bold text-2xl sm:text-3xl tracking-tight text-center">Attendance System</a>
+            <div class="flex flex-wrap justify-end gap-x-5 gap-y-1 text-sm">
+                <a href="/register/" class="text-indigo-200 hover:text-white transition">Register</a>
+                <a href="/recognize/" class="text-white font-semibold underline underline-offset-4">Mark Attendance</a>
+                <a href="/report/" class="text-indigo-200 hover:text-white transition">Report</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-xl mx-auto px-4 sm:px-6 py-10 sm:py-16 relative z-10">
+        <div class="card-glow bg-white/25 backdrop-blur-xl border border-white/40 rounded-2xl p-6 sm:p-10 fade-in text-center">
+
+            <h1 class="text-2xl sm:text-3xl font-bold text-white mb-1">Mark Attendance</h1>
+            <p class="text-indigo-50 text-sm mb-6">Stand in front of the camera to check in.</p>
+
+            <!-- Mode toggle -->
+            <div class="flex justify-center mb-5">
+                <div class="inline-flex bg-white/20 backdrop-blur-md rounded-xl p-1 text-sm font-semibold w-full sm:w-auto border border-white/30">
+                    <button id="mode-multiple" onclick="setMode('multiple')"
+                            class="flex-1 sm:flex-none px-4 py-2 rounded-lg transition bg-white text-purple-800">
+                        Multiple Access
+                    </button>
+                    <button id="mode-single" onclick="setMode('single')"
+                            class="flex-1 sm:flex-none px-4 py-2 rounded-lg transition text-white/80">
+                        Select yourself
+                    </button>
+                </div>
+            </div>
+
+            <div class="rounded-xl overflow-hidden border-4 border-white/60 inline-block">
+                <video id="video" autoplay muted playsinline class="block w-full max-w-[420px] h-auto"></video>
+            </div>
+
+            <div id="status-banner" class="waiting mt-5 rounded-xl px-5 py-4 font-bold text-lg flex items-center justify-center gap-2 min-h-[3rem] transition-colors bg-white/30 text-white">
+                <span class="text-2xl leading-none" id="status-icon"></span>
+                <span id="status-text">Starting camera...</span>
+            </div>
+
+            <div id="checkin-list" class="mt-8 text-left">
+                <h2 class="text-sm font-semibold uppercase tracking-wider text-indigo-50 mb-2">Checked in today</h2>
+                <div id="checkin-items" class="space-y-2"></div>
+            </div>
+
+            <canvas id="canvas" style="display:none;"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const neuralCanvas = document.getElementById('neuralCanvas');
+        const neuralCtx = neuralCanvas.getContext('2d');
+        let nWidth, nHeight, nParticles;
+
+        const N_PARTICLE_COUNT = 70;
+        const N_MAX_DIST = 130;
+        const N_SPEED = 0.35;
+
+        function nResize() {
+            nWidth = neuralCanvas.width = window.innerWidth;
+            nHeight = neuralCanvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', nResize);
+        nResize();
+
+        nParticles = Array.from({ length: N_PARTICLE_COUNT }, () => ({
+            x: Math.random() * nWidth,
+            y: Math.random() * nHeight,
+            vx: (Math.random() - 0.5) * N_SPEED,
+            vy: (Math.random() - 0.5) * N_SPEED,
+        }));
+
+        const nReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        function nDrawFrame() {
+            neuralCtx.clearRect(0, 0, nWidth, nHeight);
+
+            for (const p of nParticles) {
+                if (!nReducedMotion) {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    if (p.x < 0 || p.x > nWidth) p.vx *= -1;
+                    if (p.y < 0 || p.y > nHeight) p.vy *= -1;
+                }
+                neuralCtx.beginPath();
+                neuralCtx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+                neuralCtx.fillStyle = 'rgba(255,255,255,0.65)';
+                neuralCtx.fill();
+            }
+
+            for (let i = 0; i < nParticles.length; i++) {
+                for (let j = i + 1; j < nParticles.length; j++) {
+                    const a = nParticles[i], b = nParticles[j];
+                    const dx = a.x - b.x, dy = a.y - b.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < N_MAX_DIST) {
+                        neuralCtx.beginPath();
+                        neuralCtx.moveTo(a.x, a.y);
+                        neuralCtx.lineTo(b.x, b.y);
+                        neuralCtx.strokeStyle = `rgba(255,255,255,${0.25 * (1 - dist / N_MAX_DIST)})`;
+                        neuralCtx.lineWidth = 1;
+                        neuralCtx.stroke();
+                    }
+                }
+            }
+
+            if (!nReducedMotion) requestAnimationFrame(nDrawFrame);
+        }
+        nDrawFrame();
+    </script>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const banner = document.getElementById('status-banner');
+        const statusIcon = document.getElementById('status-icon');
+        const statusText = document.getElementById('status-text');
+        const checkinList = document.getElementById('checkin-list');
+        const checkinItems = document.getElementById('checkin-items');
+        const modeMultipleBtn = document.getElementById('mode-multiple');
+        const modeSingleBtn = document.getElementById('mode-single');
+
+        const alreadyMarkedIds = new Set();
+        const SEND_INTERVAL_MS = 1500;
+        const RESET_DELAY_MS = 3000;
+
+        let resetTimer = null;
+        let mode = 'multiple';
+
+        // Tailwind-based color classes per banner state
+        const BANNER_STYLES = {
+            waiting: 'bg-white/30 text-white',
+            granted: 'bg-green-500 text-white',
+            already: 'bg-amber-500 text-white',
+            denied: 'bg-red-500 text-white',
+        };
+
+        function setMode(newMode) {
+            mode = newMode;
+            const activeClasses = ['bg-white', 'text-purple-800'];
+            const inactiveClasses = ['text-white/80'];
+
+            if (newMode === 'multiple') {
+                modeMultipleBtn.classList.add(...activeClasses);
+                modeMultipleBtn.classList.remove(...inactiveClasses);
+                modeSingleBtn.classList.remove(...activeClasses);
+                modeSingleBtn.classList.add(...inactiveClasses);
+                checkinList.classList.remove('hidden');
+            } else {
+                modeSingleBtn.classList.add(...activeClasses);
+                modeSingleBtn.classList.remove(...inactiveClasses);
+                modeMultipleBtn.classList.remove(...activeClasses);
+                modeMultipleBtn.classList.add(...inactiveClasses);
+                // Single-person mode: this is a personal check-in screen,
+                // so hide the shared roster list — just show your own result.
+                checkinList.classList.add('hidden');
+            }
+        }
+
+        function getCsrfCookie() {
+            const match = document.cookie.match(/csrftoken=([^;]+)/);
+            return match ? match[1] : '';
+        }
+
+        function setBanner(state, icon, html) {
+            banner.className = state + ' mt-5 rounded-xl px-5 py-4 font-bold text-lg flex items-center justify-center gap-2 min-h-[3rem] transition-colors ' + BANNER_STYLES[state];
+            statusIcon.textContent = icon;
+            statusText.innerHTML = html;
+
+            clearTimeout(resetTimer);
+            if (state !== 'waiting') {
+                resetTimer = setTimeout(() => {
+                    setBanner('waiting', '', 'Looking for a face...');
+                }, RESET_DELAY_MS);
+            }
+        }
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                setBanner('waiting', '', 'Camera ready — looking for faces...');
+                setInterval(captureAndSend, SEND_INTERVAL_MS);
+            } catch (err) {
+                setBanner('denied', '⚠️', 'Could not access camera: ' + err.message);
+            }
+        }
+
+        function captureAndSend() {
+            // Both modes auto-recognize from the camera directly — no name
+            // picker needed. The only difference is Multiple Access keeps
+            // building a shared roster list; Select Yourself is a personal
+            // check-in view (see setMode above), but the recognition call
+            // itself is identical either way.
+            const ctx = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = canvas.toDataURL('image/jpeg', 0.8);
+
+            fetch('/mark_attendance/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfCookie(),
+                },
+                body: JSON.stringify({ image: imageData }),
+            })
+            .then(res => res.json())
+            .then(handleResult)
+            .catch(err => {
+                setBanner('denied', '⚠️', 'Error contacting server: ' + err);
+            });
+        }
+
+        function handleResult(data) {
+            const isSettling = !banner.className.includes('bg-white/30');
+
+            switch (data.status) {
+                case 'no_face':
+                    if (!isSettling) setBanner('waiting', '', 'Looking for a face...');
+                    break;
+                case 'no_trained_students':
+                    setBanner('denied', '⚠️', data.message || 'No trained students yet — register and capture faces first.');
+                    break;
+                case 'unrecognized':
+                    if (!isSettling) setBanner('denied', '❌', 'Face not recognized.');
+                    break;
+                case 'marked':
+                    setBanner(
+                        'granted',
+                        '✅',
+                        `Access Granted<span class="block font-normal text-sm mt-0.5">${data.student_name} (${data.roll_number}) — ${data.time}</span>`
+                    );
+                    addCheckin(data, false);
+                    break;
+                case 'already_marked':
+                    setBanner(
+                        'already',
+                        '⏱️',
+                        `Already Checked In<span class="block font-normal text-sm mt-0.5">${data.student_name} (${data.roll_number}) — ${data.time}</span>`
+                    );
+                    addCheckin(data, true);
+                    break;
+                case 'error':
+                    setBanner('denied', '⚠️', 'Error: ' + data.message);
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        function addCheckin(data, alreadyKnown) {
+            if (alreadyMarkedIds.has(data.student_id)) {
+                return;
+            }
+            alreadyMarkedIds.add(data.student_id);
+
+            const item = document.createElement('div');
+            item.className = 'bg-white/40 backdrop-blur-md border-l-4 rounded-lg px-4 py-2 flex justify-between items-center ' +
+                (alreadyKnown ? 'border-gray-400 text-gray-600' : 'border-green-500 text-gray-900');
+            item.innerHTML = `
+                <span class="font-semibold">${data.student_name} (${data.roll_number})</span>
+                <span class="text-sm text-gray-600">${data.time}</span>
+            `;
+            checkinItems.prepend(item);
+        }
+
+        setMode('multiple');
+        startCamera();
+    </script>
+</body>
+</html>

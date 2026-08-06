@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        body {
+            background: linear-gradient(-45deg, #4c1d95, #7e22ce, #db2777, #f97316);
+            background-size: 400% 400%;
+            animation: gradientShift 18s ease infinite;
+            min-height: 100vh;
+        }
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: rise 0.5s ease forwards; }
+        @media (prefers-reduced-motion: reduce) {
+            .card-glow, .pulse-dot::after { animation: none !important; }
+        }
+        .pulse-dot { position: relative; }
+        .pulse-dot::after {
+            content: '';
+            position: absolute;
+            inset: -6px;
+            border-radius: 9999px;
+            border: 1.5px solid #22c55e;
+            animation: pulse 2.2s ease-out infinite;
+        }
+        @keyframes pulse {
+            0%   { transform: scale(0.5); opacity: 0.9; }
+            80%  { transform: scale(1.8); opacity: 0; }
+            100% { opacity: 0; }
+        }
+        @keyframes cardGlow {
+            0%, 100% {
+                box-shadow: 0 0 30px 4px rgba(124, 58, 237, 0.45),
+                            0 0 60px 10px rgba(219, 39, 119, 0.25);
+            }
+            50% {
+                box-shadow: 0 0 45px 8px rgba(249, 115, 22, 0.45),
+                            0 0 80px 16px rgba(124, 58, 237, 0.3);
+            }
+        }
+        .card-glow {
+            animation: cardGlow 6s ease-in-out infinite;
+        }
+        #neuralCanvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen relative">
+    <canvas id="neuralCanvas"></canvas>
+    <!-- Nav -->
+    <nav class="bg-gray-900/80 backdrop-blur sticky top-0 z-10 relative">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 py-3 grid grid-cols-3 items-center">
+            <div></div>
+            <a href="/" class="text-white font-bold text-2xl sm:text-3xl tracking-tight text-center">Attendance System</a>
+            <div class="flex flex-wrap justify-end gap-x-5 gap-y-1 text-sm">
+                <a href="/register/" class="text-indigo-200 hover:text-white transition">Register</a>
+                <a href="/recognize/" class="text-indigo-200 hover:text-white transition">Mark Attendance</a>
+                <a href="/report/" class="text-indigo-200 hover:text-white transition">Report</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 py-10 sm:py-14 relative z-10">
+        <div class="card-glow bg-white/25 backdrop-blur-xl border border-white/40 rounded-2xl p-6 sm:p-10 fade-in">
+
+            <div class="flex items-center gap-2 mb-1">
+                <span class="w-2.5 h-2.5 rounded-full bg-green-500 pulse-dot"></span>
+                <h1 class="text-2xl sm:text-3xl font-bold text-white drop-shadow-sm">Attendance System</h1>
+            </div>
+            <p class="text-indigo-50 text-sm sm:text-base mb-6">
+                Face-recognition roll call — register once, check in with a glance.
+            </p>
+
+            <a href="/register/"
+               class="inline-flex items-center gap-2 bg-white text-indigo-700 font-semibold text-sm sm:text-base px-5 py-3 rounded-xl transition shadow-md hover:shadow-lg hover:-translate-y-0.5 hover:bg-indigo-50">
+                + Register New Student
+            </a>
+
+            <div class="mt-10 mb-3 flex items-center gap-2">
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-indigo-50">Registered Students</h2>
+                <span class="bg-white/30 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
+                    {{ students|length }}
+                </span>
+            </div>
+
+            <!-- Desktop/tablet table -->
+            <div class="hidden sm:block border border-white/30 rounded-xl overflow-hidden bg-white/40 backdrop-blur-md">
+                <table class="w-full text-sm">
+                    <thead class="bg-white/30 text-indigo-900 uppercase text-xs">
+                        <tr>
+                            <th class="text-left px-4 py-3">Roll Number</th>
+                            <th class="text-left px-4 py-3">Name</th>
+                            <th class="text-left px-4 py-3">Registered On</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for student in students %}
+                        <tr class="border-t border-white/20 hover:bg-white/30 transition">
+                            <td class="px-4 py-3 text-gray-700">{{ student.roll_number }}</td>
+                            <td class="px-4 py-3 font-medium text-gray-900">{{ student.name }}</td>
+                            <td class="px-4 py-3 text-gray-700">{{ student.registered_on|date:"M j, Y, g:i a" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="3" class="px-4 py-8 text-center text-gray-600">
+                                No students registered yet — add the first one above.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Mobile stacked cards (shown instead of table on small screens) -->
+            <div class="sm:hidden space-y-3">
+                {% for student in students %}
+                <div class="border border-white/30 bg-white/40 backdrop-blur-md rounded-xl p-4">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-semibold text-gray-900">{{ student.name }}</span>
+                        <span class="text-xs text-gray-600">#{{ student.roll_number }}</span>
+                    </div>
+                    <div class="text-xs text-gray-700">{{ student.registered_on|date:"M j, Y, g:i a" }}</div>
+                </div>
+                {% empty %}
+                <div class="text-center text-indigo-50 py-8 border border-white/30 bg-white/20 rounded-xl">
+                    No students registered yet — add the first one above.
+                </div>
+                {% endfor %}
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('neuralCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height, particles;
+
+        const PARTICLE_COUNT = 70;
+        const MAX_DIST = 130;
+        const SPEED = 0.35;
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function initParticles() {
+            particles = Array.from({ length: PARTICLE_COUNT }, () => ({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                vx: (Math.random() - 0.5) * SPEED,
+                vy: (Math.random() - 0.5) * SPEED,
+            }));
+        }
+        initParticles();
+
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        function drawFrame() {
+            ctx.clearRect(0, 0, width, height);
+
+            for (const p of particles) {
+                if (!prefersReducedMotion) {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    if (p.x < 0 || p.x > width) p.vx *= -1;
+                    if (p.y < 0 || p.y > height) p.vy *= -1;
+                }
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255,255,255,0.65)';
+                ctx.fill();
+            }
+
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const a = particles[i], b = particles[j];
+                    const dx = a.x - b.x, dy = a.y - b.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < MAX_DIST) {
+                        ctx.beginPath();
+                        ctx.moveTo(a.x, a.y);
+                        ctx.lineTo(b.x, b.y);
+                        ctx.strokeStyle = `rgba(255,255,255,${0.25 * (1 - dist / MAX_DIST)})`;
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            if (!prefersReducedMotion) {
+                requestAnimationFrame(drawFrame);
+            }
+        }
+
+        drawFrame();
+    </script>
+</body>
+</html>

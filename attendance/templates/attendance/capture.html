@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Capture Face - {{ student.name }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        body {
+            background: linear-gradient(-45deg, #4c1d95, #7e22ce, #db2777, #f97316);
+            background-size: 400% 400%;
+            animation: gradientShift 18s ease infinite;
+            min-height: 100vh;
+        }
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: rise 0.5s ease forwards; }
+        @keyframes cardGlow {
+            0%, 100% {
+                box-shadow: 0 0 30px 4px rgba(124, 58, 237, 0.45),
+                            0 0 60px 10px rgba(219, 39, 119, 0.25);
+            }
+            50% {
+                box-shadow: 0 0 45px 8px rgba(249, 115, 22, 0.45),
+                            0 0 80px 16px rgba(124, 58, 237, 0.3);
+            }
+        }
+        .card-glow { animation: cardGlow 6s ease-in-out infinite; }
+        #neuralCanvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .card-glow, body { animation: none !important; }
+        }
+    </style>
+</head>
+<body class="min-h-screen relative">
+    <canvas id="neuralCanvas"></canvas>
+
+    <!-- Nav -->
+    <nav class="bg-gray-900/80 backdrop-blur sticky top-0 z-10 relative">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 py-3 grid grid-cols-3 items-center">
+            <div></div>
+            <a href="/" class="text-white font-bold text-2xl sm:text-3xl tracking-tight text-center">Attendance System</a>
+            <div class="flex flex-wrap justify-end gap-x-5 gap-y-1 text-sm">
+                <a href="/register/" class="text-indigo-200 hover:text-white transition">Register</a>
+                <a href="/recognize/" class="text-indigo-200 hover:text-white transition">Mark Attendance</a>
+                <a href="/report/" class="text-indigo-200 hover:text-white transition">Report</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-md mx-auto px-4 sm:px-6 py-10 sm:py-16 relative z-10">
+        <div class="card-glow bg-white/25 backdrop-blur-xl border border-white/40 rounded-2xl p-6 sm:p-10 fade-in text-center">
+
+            <h1 class="text-xl sm:text-2xl font-bold text-white mb-2">
+                Capturing face for: {{ student.name }} ({{ student.roll_number }})
+            </h1>
+            <p class="text-indigo-50 text-sm mb-6">
+                Slowly move your head slightly (left/right/up/down) while this captures {{ images_needed }} photos.
+            </p>
+
+            <video id="video" width="400" height="300" autoplay
+                   class="rounded-xl border-4 border-white/60 mx-auto w-full max-w-[360px] h-auto"></video>
+            <canvas id="canvas" width="400" height="300" style="display:none;"></canvas>
+
+            <div class="w-full bg-white/30 rounded-full overflow-hidden mt-5 h-4">
+                <div id="progressFill" class="h-4 bg-white transition-all duration-300" style="width:0%"></div>
+            </div>
+
+            <p id="status" class="mt-4 font-semibold text-white">Starting camera...</p>
+
+            <button id="retryBtn" onclick="location.reload()"
+                    style="display:none;"
+                    class="mt-3 px-5 py-2 bg-white text-indigo-700 font-semibold rounded-xl hover:bg-indigo-50 transition">
+                Retry Camera
+            </button>
+
+            <p id="doneMsg" style="display:none;" class="mt-4 text-green-200 font-semibold text-lg">
+                ✅ Done! {{ images_needed }} face images captured for {{ student.name }}.
+            </p>
+
+        </div>
+    </div>
+
+    {{ student.id|json_script:"student-id-data" }}
+    {{ images_needed|json_script:"images-needed-data" }}
+
+    <script>
+        const neuralCanvas = document.getElementById('neuralCanvas');
+        const neuralCtx = neuralCanvas.getContext('2d');
+        let nWidth, nHeight, nParticles;
+
+        const N_PARTICLE_COUNT = 70;
+        const N_MAX_DIST = 130;
+        const N_SPEED = 0.35;
+
+        function nResize() {
+            nWidth = neuralCanvas.width = window.innerWidth;
+            nHeight = neuralCanvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', nResize);
+        nResize();
+
+        nParticles = Array.from({ length: N_PARTICLE_COUNT }, () => ({
+            x: Math.random() * nWidth,
+            y: Math.random() * nHeight,
+            vx: (Math.random() - 0.5) * N_SPEED,
+            vy: (Math.random() - 0.5) * N_SPEED,
+        }));
+
+        const nReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        function nDrawFrame() {
+            neuralCtx.clearRect(0, 0, nWidth, nHeight);
+
+            for (const p of nParticles) {
+                if (!nReducedMotion) {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    if (p.x < 0 || p.x > nWidth) p.vx *= -1;
+                    if (p.y < 0 || p.y > nHeight) p.vy *= -1;
+                }
+                neuralCtx.beginPath();
+                neuralCtx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+                neuralCtx.fillStyle = 'rgba(255,255,255,0.65)';
+                neuralCtx.fill();
+            }
+
+            for (let i = 0; i < nParticles.length; i++) {
+                for (let j = i + 1; j < nParticles.length; j++) {
+                    const a = nParticles[i], b = nParticles[j];
+                    const dx = a.x - b.x, dy = a.y - b.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < N_MAX_DIST) {
+                        neuralCtx.beginPath();
+                        neuralCtx.moveTo(a.x, a.y);
+                        neuralCtx.lineTo(b.x, b.y);
+                        neuralCtx.strokeStyle = `rgba(255,255,255,${0.25 * (1 - dist / N_MAX_DIST)})`;
+                        neuralCtx.lineWidth = 1;
+                        neuralCtx.stroke();
+                    }
+                }
+            }
+
+            if (!nReducedMotion) requestAnimationFrame(nDrawFrame);
+        }
+        nDrawFrame();
+    </script>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const statusEl = document.getElementById('status');
+        const progressFill = document.getElementById('progressFill');
+        const doneMsg = document.getElementById('doneMsg');
+
+        const studentId = JSON.parse(document.getElementById('student-id-data').textContent);
+        const imagesNeeded = JSON.parse(document.getElementById('images-needed-data').textContent);
+        let capturedCount = 0;
+        let capturing = false;
+
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+                statusEl.textContent = "Camera ready. Starting capture in 2 seconds...";
+                setTimeout(() => {
+                    capturing = true;
+                    captureLoop();
+                }, 2000);
+            })
+            .catch(err => {
+                statusEl.textContent = "Could not access camera: " + err;
+                document.getElementById('retryBtn').style.display = 'inline-block';
+            });
+
+        function captureLoop() {
+            if (!capturing || capturedCount >= imagesNeeded) return;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = canvas.toDataURL('image/jpeg', 0.8);
+
+            fetch(`/api/save_face/${studentId}/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: imageData })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    capturedCount = data.count;
+                    const pct = Math.min(100, (capturedCount / imagesNeeded) * 100);
+                    progressFill.style.width = pct + '%';
+                    statusEl.textContent = `Captured ${capturedCount} / ${imagesNeeded}`;
+                } else if (data.status === 'no_face') {
+                    statusEl.textContent = "No face detected — face the camera clearly.";
+                }
+
+                if (capturedCount >= imagesNeeded) {
+                    capturing = false;
+                    statusEl.style.display = 'none';
+                    doneMsg.style.display = 'block';
+                    const stream = video.srcObject;
+                    if (stream) stream.getTracks().forEach(track => track.stop());
+                } else {
+                    setTimeout(captureLoop, 400);
+                }
+            })
+            .catch(err => {
+                statusEl.textContent = "Error saving image: " + err;
+                setTimeout(captureLoop, 800);
+            });
+        }
+    </script>
+</body>
+</html>
