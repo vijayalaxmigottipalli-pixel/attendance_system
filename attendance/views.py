@@ -101,16 +101,20 @@ def save_face(request, student_id):
             return JsonResponse({"status": "no_face", "message": "Could not decode image"})
 
         frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-        face_locations = face_recognition.face_locations(frame_rgb)
 
-        if not face_locations:
+        # Detect on a downscaled copy for speed, then scale coords back up
+        small_rgb = cv2.resize(frame_rgb, (0, 0), fx=0.5, fy=0.5)
+        face_locations_small = face_recognition.face_locations(small_rgb)
+
+        if not face_locations_small:
             return JsonResponse({"status": "no_face", "message": "No face detected"})
 
         def area(loc):
             top, right, bottom, left = loc
             return (bottom - top) * (right - left)
 
-        top, right, bottom, left = max(face_locations, key=area)
+        top, right, bottom, left = max(face_locations_small, key=area)
+        top, right, bottom, left = top * 2, right * 2, bottom * 2, left * 2
 
         h, w, _ = frame_bgr.shape
         pad = 20
@@ -137,6 +141,7 @@ def save_face(request, student_id):
             if encoding is not None:
                 student.face_encoding = encoding.tolist()
                 student.save()
+                refresh_student_cache()
                 response["training_complete"] = True
             else:
                 response["training_complete"] = False
@@ -180,13 +185,78 @@ def recognize_page(request):
     return render(request, "attendance/recognize.html")
 
 
+def _match_student(frame_encoding, known_encodings, student_list):
+    """
+    Compares a single face encoding against every trained student's
+    encoding and returns (matched_student_or_None, best_distance).
+    """
+    distances = face_recognition.face_distance(known_encodings, frame_encoding)
+    best_idx = int(np.argmin(distances))
+    best_distance = float(distances[best_idx])
+
+    if best_distance > MATCH_TOLERANCE:
+        return None, best_distance
+
+    return student_list[best_idx], best_distance
+
+
+# In-memory cache of trained student encodings, so recognize/ doesn't hit
+# the DB and re-parse JSON on every single poll (every ~1.5s). Invalidated
+# whenever save_face finishes training a new student (see _build_average_encoding
+# call site) or manually via refresh_student_cache().
+_student_cache = {"encodings": None, "students": None}
+
+
+def _get_known_students():
+    if _student_cache["encodings"] is None:
+        trained_students = list(Student.objects.exclude(face_encoding__isnull=True))
+        if trained_students:
+            _student_cache["encodings"] = np.array([s.face_encoding for s in trained_students])
+            _student_cache["students"] = trained_students
+        else:
+            _student_cache["encodings"] = np.empty((0, 128))
+            _student_cache["students"] = []
+    return _student_cache["encodings"], _student_cache["students"]
+
+
+def refresh_student_cache():
+    """Call this after a new student finishes training so recognize/ picks
+    them up immediately instead of waiting for a server restart."""
+    _student_cache["encodings"] = None
+    _student_cache["students"] = None
+
+
+# Detection is run on the frame scaled down to this width (px). Lower =
+# faster detection but can miss small/far-away faces. 480-640 is a good
+# balance for a webcam kiosk where people stand close to the camera.
+DETECTION_MAX_WIDTH = 480
+
+
 @csrf_exempt
 def mark_attendance(request):
     """
-    Receives a single webcam frame, finds the closest matching trained
-    student (if any), and marks them present for today. Designed to be
-    called repeatedly (e.g. every ~1.5s) from a continuously-running
-    webcam page.
+    Receives a single webcam frame and marks attendance for every
+    recognized face found in it (not just the largest one), so that
+    "Multiple Access" mode can check in more than one person from the
+    same frame. Designed to be called repeatedly (e.g. every ~1.5s)
+    from a continuously-running webcam page.
+
+    Response shape:
+    {
+        "status": "ok",
+        "faces_detected": <int>,
+        "results": [
+            {
+                "status": "marked" | "already_marked" | "unrecognized",
+                "student_id": ...,
+                "student_name": ...,
+                "roll_number": ...,
+                "distance": ...,
+                "time": ...,
+            },
+            ...
+        ]
+    }
     """
     if request.method != "POST":
         return JsonResponse({"status": "error", "message": "POST required"}, status=405)
@@ -194,6 +264,9 @@ def mark_attendance(request):
     try:
         data = json.loads(request.body)
         image_data = data.get("image", "")
+        # "single" (Select yourself) or "multiple" (Multiple Access).
+        # Defaults to "multiple" so existing callers keep working.
+        mode = data.get("mode", "multiple")
 
         if "," in image_data:
             image_data = image_data.split(",", 1)[1]
@@ -211,18 +284,21 @@ def mark_attendance(request):
         if not face_locations:
             return JsonResponse({"status": "no_face"})
 
-        # Only look at the largest face in frame (assume one person at a time)
         def area(loc):
             top, right, bottom, left = loc
             return (bottom - top) * (right - left)
 
-        best_location = max(face_locations, key=area)
-        frame_encodings = face_recognition.face_encodings(frame_rgb, known_face_locations=[best_location])
+        if mode == "single":
+            # "Select yourself" mode: only ever look at the largest face,
+            # same behaviour as before.
+            face_locations = [max(face_locations, key=area)]
+
+        frame_encodings = face_recognition.face_encodings(
+            frame_rgb, known_face_locations=face_locations
+        )
 
         if not frame_encodings:
             return JsonResponse({"status": "no_face"})
-
-        frame_encoding = frame_encodings[0]
 
         trained_students = Student.objects.exclude(face_encoding__isnull=True)
 
@@ -233,28 +309,46 @@ def mark_attendance(request):
         known_encodings = np.array([s.face_encoding for s in trained_students])
         student_list = list(trained_students)
 
-        distances = face_recognition.face_distance(known_encodings, frame_encoding)
-        best_idx = int(np.argmin(distances))
-        best_distance = distances[best_idx]
-
-        if best_distance > MATCH_TOLERANCE:
-            return JsonResponse({"status": "unrecognized", "distance": float(best_distance)})
-
-        matched_student = student_list[best_idx]
         today = timezone.localdate()
+        results = []
+        seen_student_ids = set()
 
-        record, created = AttendanceRecord.objects.get_or_create(
-            student=matched_student,
-            date=today,
-        )
+        for frame_encoding in frame_encodings:
+            matched_student, best_distance = _match_student(
+                frame_encoding, known_encodings, student_list
+            )
+
+            if matched_student is None:
+                results.append({
+                    "status": "unrecognized",
+                    "distance": best_distance,
+                })
+                continue
+
+            # Avoid double-processing the same student twice if two
+            # detected face boxes somehow matched the same person.
+            if matched_student.id in seen_student_ids:
+                continue
+            seen_student_ids.add(matched_student.id)
+
+            record, created = AttendanceRecord.objects.get_or_create(
+                student=matched_student,
+                date=today,
+            )
+
+            results.append({
+                "status": "marked" if created else "already_marked",
+                "student_id": matched_student.id,
+                "student_name": matched_student.name,
+                "roll_number": matched_student.roll_number,
+                "distance": best_distance,
+                "time": record.time.strftime("%I:%M %p"),
+            })
 
         return JsonResponse({
-            "status": "marked" if created else "already_marked",
-            "student_id": matched_student.id,
-            "student_name": matched_student.name,
-            "roll_number": matched_student.roll_number,
-            "distance": float(best_distance),
-            "time": record.time.strftime("%I:%M %p"),
+            "status": "ok",
+            "faces_detected": len(face_locations),
+            "results": results,
         })
 
     except Exception as e:

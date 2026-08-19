@@ -186,6 +186,8 @@
         const RESET_DELAY_MS = 3000;
 
         let resetTimer = null;
+        let pollTimer = null;
+        let requestInFlight = false;
         let mode = 'multiple';
 
         // Tailwind-based color classes per banner state
@@ -241,23 +243,38 @@
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true });
                 video.srcObject = stream;
                 setBanner('waiting', '', 'Camera ready — looking for faces...');
-                setInterval(captureAndSend, SEND_INTERVAL_MS);
+                scheduleNextCapture();
             } catch (err) {
                 setBanner('denied', '⚠️', 'Could not access camera: ' + err.message);
             }
         }
 
+        function scheduleNextCapture() {
+            clearTimeout(pollTimer);
+            pollTimer = setTimeout(captureAndSend, SEND_INTERVAL_MS);
+        }
+
         function captureAndSend() {
+            // Skip this tick if a previous request is still in flight —
+            // prevents a burst of overlapping requests piling up on the
+            // dev server if one response is slow to come back.
+            if (requestInFlight) {
+                scheduleNextCapture();
+                return;
+            }
+
             // Both modes auto-recognize from the camera directly — no name
             // picker needed. The only difference is Multiple Access keeps
             // building a shared roster list; Select Yourself is a personal
-            // check-in view (see setMode above), but the recognition call
-            // itself is identical either way.
+            // check-in view (see setMode above) and only asks the backend
+            // to match a single (largest) face.
             const ctx = canvas.getContext('2d');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             const imageData = canvas.toDataURL('image/jpeg', 0.8);
+
+            requestInFlight = true;
 
             fetch('/mark_attendance/', {
                 method: 'POST',
@@ -265,12 +282,16 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': getCsrfCookie(),
                 },
-                body: JSON.stringify({ image: imageData }),
+                body: JSON.stringify({ image: imageData, mode: mode }),
             })
             .then(res => res.json())
             .then(handleResult)
             .catch(err => {
                 setBanner('denied', '⚠️', 'Error contacting server: ' + err);
+            })
+            .finally(() => {
+                requestInFlight = false;
+                scheduleNextCapture();
             });
         }
 
@@ -284,30 +305,51 @@
                 case 'no_trained_students':
                     setBanner('denied', '⚠️', data.message || 'No trained students yet — register and capture faces first.');
                     break;
-                case 'unrecognized':
-                    if (!isSettling) setBanner('denied', '❌', 'Face not recognized.');
-                    break;
-                case 'marked':
-                    setBanner(
-                        'granted',
-                        '✅',
-                        `Access Granted<span class="block font-normal text-sm mt-0.5">${data.student_name} (${data.roll_number}) — ${data.time}</span>`
-                    );
-                    addCheckin(data, false);
-                    break;
-                case 'already_marked':
-                    setBanner(
-                        'already',
-                        '⏱️',
-                        `Already Checked In<span class="block font-normal text-sm mt-0.5">${data.student_name} (${data.roll_number}) — ${data.time}</span>`
-                    );
-                    addCheckin(data, true);
+                case 'ok':
+                    handleFaceResults(data.results || [], isSettling);
                     break;
                 case 'error':
                     setBanner('denied', '⚠️', 'Error: ' + data.message);
                     break;
                 default:
                     break;
+            }
+        }
+
+        function handleFaceResults(results, isSettling) {
+            if (!results.length) return;
+
+            // Every recognized face (new or already-checked-in) gets added
+            // to the roster list, not just whichever the banner highlights.
+            results.forEach(r => {
+                if (r.status === 'marked') addCheckin(r, false);
+                else if (r.status === 'already_marked') addCheckin(r, true);
+            });
+
+            // Banner shows the single most notable result this tick:
+            // a brand-new check-in beats "already checked in", which
+            // beats "face not recognized".
+            const primary =
+                results.find(r => r.status === 'marked') ||
+                results.find(r => r.status === 'already_marked') ||
+                results.find(r => r.status === 'unrecognized');
+
+            if (!primary) return;
+
+            if (primary.status === 'marked') {
+                setBanner(
+                    'granted',
+                    '✅',
+                    `Access Granted<span class="block font-normal text-sm mt-0.5">${primary.student_name} (${primary.roll_number}) — ${primary.time}</span>`
+                );
+            } else if (primary.status === 'already_marked') {
+                setBanner(
+                    'already',
+                    '⏱️',
+                    `Already Checked In<span class="block font-normal text-sm mt-0.5">${primary.student_name} (${primary.roll_number}) — ${primary.time}</span>`
+                );
+            } else if (primary.status === 'unrecognized' && !isSettling) {
+                setBanner('denied', '❌', 'Face not recognized.');
             }
         }
 

@@ -10,7 +10,10 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
+
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,12 +23,29 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-=w%#6g34a*ql_l(u0-#@=%=y52@^qgnr1*lxirp6fnk42#kt8&'
+# Locally, if SECRET_KEY isn't set as an env var, falls back to the dev key below.
+# On Render, set SECRET_KEY as an environment variable to a real random value.
+SECRET_KEY = os.environ.get(
+    "SECRET_KEY",
+    "django-insecure-=w%#6g34a*ql_l(u0-#@=%=y52@^qgnr1*lxirp6fnk42#kt8&",
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Locally this defaults to True. On Render, set DEBUG=False as an env var.
+DEBUG = os.environ.get("DEBUG", "True") == "True"
 
-ALLOWED_HOSTS = []
+# Comma-separated list of allowed hosts, e.g. "myapp.onrender.com,127.0.0.1"
+# set as an env var on Render. Locally falls back to allowing everything on
+# localhost/127.0.0.1.
+ALLOWED_HOSTS = [
+    h.strip() for h in os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if h.strip()
+]
+
+# Render sets this automatically for the service's own hostname — pick it up
+# so you don't have to hardcode the onrender.com URL yourself.
+RENDER_EXTERNAL_HOSTNAME = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 
 # Application definition
@@ -42,6 +62,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # serves static files in production
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -72,12 +93,16 @@ WSGI_APPLICATION = 'attendance_system.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
+#
+# Locally (no DATABASE_URL env var set), falls back to SQLite as before.
+# On Render, set DATABASE_URL to the Postgres connection string from your
+# Render Postgres instance and this will use that instead.
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600,
+    )
 }
 
 
@@ -117,3 +142,16 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'  # collectstatic dumps files here for whitenoise to serve
+
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
+
+# Default primary key field type
+# https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

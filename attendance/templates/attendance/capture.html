@@ -215,7 +215,7 @@
                     const stream = video.srcObject;
                     if (stream) stream.getTracks().forEach(track => track.stop());
                 } else {
-                    setTimeout(captureLoop, 400);
+                    setTimeout(captureLoop, 200);
                 }
             })
             .catch(err => {
