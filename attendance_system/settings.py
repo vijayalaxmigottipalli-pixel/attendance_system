@@ -39,8 +39,17 @@ ALLOWED_HOSTS = [
 ]
 # Render sets this automatically for the service's own hostname — pick it up
 # so you don't have to hardcode the onrender.com URL yourself.
+<<<<<<< HEAD
 
 
+=======
+RENDER_EXTERNAL_HOSTNAME = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+CSRF_TRUSTED_ORIGINS = [
+    "https://attendancesystem-production-7499.up.railway.app",
+]
+>>>>>>> 73439debf4b234f430d55c094d0eb5a17c6f9317
 
 # Application definition
 
