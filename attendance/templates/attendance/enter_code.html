@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mark Attendance</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: #0f172a;
+            min-height: 100vh;
+        }
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: rise 0.5s ease forwards; }
+        .card-glow {
+            box-shadow:
+                0 0 35px 6px rgba(124, 58, 237, 0.35),
+                0 0 65px 12px rgba(30, 64, 175, 0.25);
+        }
+        #neuralCanvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .fade-in { animation: none !important; }
+        }
+        .code-input {
+            letter-spacing: 0.5em;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body class="min-h-screen relative">
+    <canvas id="neuralCanvas"></canvas>
+
+    <nav class="bg-gray-900/80 backdrop-blur sticky top-0 z-10 relative">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex justify-center items-center">
+            <a href="/" class="text-white font-bold text-2xl sm:text-3xl tracking-tight">Attendance System</a>
+        </div>
+    </nav>
+
+    <div class="max-w-xl mx-auto px-4 sm:px-6 py-10 sm:py-16 relative z-10">
+        <div class="card-glow bg-white/10 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-10 fade-in">
+
+            <h1 class="text-2xl sm:text-3xl font-bold text-white text-center mb-2">Mark Attendance</h1>
+            <p class="text-white/80 text-center text-sm mb-6">Enter the code your teacher shared with the class.</p>
+
+            {% if error %}
+                <p class="bg-red-500/20 border border-red-300/40 text-white text-sm rounded-lg px-4 py-3 text-center mb-4">
+                    {{ error }}
+                </p>
+            {% endif %}
+
+            <form method="POST" class="space-y-5">
+                {% csrf_token %}
+
+                <div>
+                    <label class="block text-white/90 text-sm font-medium mb-1.5 text-center">Session Code</label>
+                    <input type="text" name="session_code" placeholder="000000"
+                           value="{{ session_code|default:'' }}"
+                           maxlength="10"
+                           autocomplete="off"
+                           style="text-transform: uppercase;"
+                           class="code-input w-full text-center text-2xl px-4 py-4 rounded-xl bg-gray-800 placeholder-gray-500 text-white border-2 border-gray-600 focus:outline-none focus:ring-2 focus:ring-white/70"
+                           required autofocus>
+                </div>
+
+                <button type="submit"
+                        class="w-full bg-white text-indigo-700 font-semibold py-3 rounded-xl transition shadow-md hover:shadow-lg hover:-translate-y-0.5 hover:bg-indigo-50">
+                    Continue
+                </button>
+            </form>
+
+            <p class="text-white/70 text-xs text-center mt-6">
+                Codes expire a few minutes after your teacher starts the session.
+            </p>
+
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('neuralCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height, particles;
+        const PARTICLE_COUNT = 70, MAX_DIST = 130, SPEED = 0.35;
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function initParticles() {
+            particles = Array.from({ length: PARTICLE_COUNT }, () => ({
+                x: Math.random() * width, y: Math.random() * height,
+                vx: (Math.random() - 0.5) * SPEED, vy: (Math.random() - 0.5) * SPEED,
+            }));
+        }
+        initParticles();
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        function drawFrame() {
+            ctx.clearRect(0, 0, width, height);
+            for (const p of particles) {
+                if (!prefersReducedMotion) {
+                    p.x += p.vx; p.y += p.vy;
+                    if (p.x < 0 || p.x > width) p.vx *= -1;
+                    if (p.y < 0 || p.y > height) p.vy *= -1;
+                }
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255,255,255,0.65)';
+                ctx.fill();
+            }
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const a = particles[i], b = particles[j];
+                    const dx = a.x - b.x, dy = a.y - b.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < MAX_DIST) {
+                        ctx.beginPath();
+                        ctx.moveTo(a.x, a.y);
+                        ctx.lineTo(b.x, b.y);
+                        ctx.strokeStyle = `rgba(255,255,255,${0.25 * (1 - dist / MAX_DIST)})`;
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+                    }
+                }
+            }
+            if (!prefersReducedMotion) requestAnimationFrame(drawFrame);
+        }
+        drawFrame();
+    </script>
+</body>
+</html>

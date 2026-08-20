@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        body {
+            background: linear-gradient(-45deg, #08081a, #1a1a3d, #16213e, #0d0d24);
+            background-size: 400% 400%;
+            animation: gradientShift 18s ease infinite;
+            min-height: 100vh;
+        }
+        @keyframes rise {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: rise 0.5s ease forwards; }
+        @keyframes cardGlow {
+            0%, 100% {
+                box-shadow: 0 0 30px 4px rgba(79, 209, 197, 0.35),
+                            0 0 60px 10px rgba(155, 93, 229, 0.2);
+            }
+            50% {
+                box-shadow: 0 0 45px 8px rgba(155, 93, 229, 0.35),
+                            0 0 80px 16px rgba(79, 209, 197, 0.25);
+            }
+        }
+        .card-glow { animation: cardGlow 6s ease-in-out infinite; }
+        #neuralCanvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .card-glow, body { animation: none !important; }
+        }
+        .role-tab { transition: all 0.2s ease; }
+        .role-tab.active { background: white; color: #4c1d95; }
+        .role-tab:not(.active) { background: rgba(255,255,255,0.15); color: white; }
+    </style>
+</head>
+<body class="min-h-screen relative">
+    <canvas id="neuralCanvas"></canvas>
+
+       <nav class="bg-gray-900/80 backdrop-blur sticky top-0 z-10 relative">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex justify-center items-center">
+            <a href="/" class="text-white font-bold text-2xl sm:text-3xl tracking-tight">Attendance System</a>
+        </div>
+    </nav>
+
+    <div class="max-w-xl mx-auto px-4 sm:px-6 py-10 sm:py-16 relative z-10">
+        <div class="card-glow bg-gray-900/90 backdrop-blur-xl border border-white/20 rounded-2xl p-6 sm:p-10 fade-in">
+
+            <h1 class="text-2xl sm:text-3xl font-bold text-white text-center mb-6">Log In</h1>
+
+            <div class="flex gap-2 mb-6 bg-white/10 p-1.5 rounded-xl">
+                <button type="button" id="tabStudent" class="role-tab flex-1 py-2.5 rounded-lg font-semibold text-sm">Student</button>
+                <button type="button" id="tabTeacher" class="role-tab flex-1 py-2.5 rounded-lg font-semibold text-sm">Teacher</button>
+            </div>
+
+            {% if error %}
+                <p class="bg-red-500/20 border border-red-300/40 text-white text-sm rounded-lg px-4 py-3 text-center mb-4">
+                    {{ error }}
+                </p>
+            {% endif %}
+
+            <form method="POST" class="space-y-4">
+                {% csrf_token %}
+                <input type="hidden" name="role" id="roleInput" value="{{ role|default:'student' }}">
+
+                <div id="studentFields">
+                    <label class="block text-white/90 text-sm font-medium mb-1.5">Username</label>
+                    <input type="text" name="student_username" placeholder="Username"
+                           value="{{ student_username|default:'' }}"
+                           class="w-full px-4 py-3 rounded-xl bg-white/5 border-2 border-white/40 placeholder-white/50 text-white focus:outline-none focus:ring-2 focus:ring-white/70">
+
+                    <label class="block text-white/90 text-sm font-medium mb-1.5 mt-4">Roll Number</label>
+                    <input type="text" name="roll_number" placeholder="24B91A5471"
+                           value="{{ roll_number|default:'' }}"
+                           style="text-transform: uppercase;"
+                           class="w-full px-4 py-3 rounded-xl bg-white/5 border-2 border-white/40 placeholder-white/50 text-white focus:outline-none focus:ring-2 focus:ring-white/70">
+                </div>
+
+                <div id="teacherFields" class="hidden">
+                    <label class="block text-white/90 text-sm font-medium mb-1.5">Username</label>
+                    <input type="text" name="username" placeholder="Username"
+                           value="{{ username|default:'' }}"
+                           class="w-full px-4 py-3 rounded-xl bg-white/5 border-2 border-white/40 placeholder-white/50 text-white focus:outline-none focus:ring-2 focus:ring-white/70">
+                </div>
+
+                <div>
+                    <label class="block text-white/90 text-sm font-medium mb-1.5">Password</label>
+                    <input type="password" name="password" placeholder="Password" required
+                           class="w-full px-4 py-3 rounded-xl bg-white/5 border-2 border-white/40 placeholder-white/50 text-white focus:outline-none focus:ring-2 focus:ring-white/70">
+                </div>
+
+                <button type="submit"
+                        class="w-full bg-white text-indigo-700 font-semibold py-3 rounded-xl transition shadow-md hover:shadow-lg hover:-translate-y-0.5 hover:bg-indigo-50">
+                    Log In
+                </button>
+            </form>
+
+            <p class="text-white/80 text-sm text-center mt-6">
+                New here?
+                <a href="/register/" class="text-white font-semibold underline hover:no-underline">Register</a>
+            </p>
+
+        </div>
+    </div>
+
+    <script>
+        const tabStudent = document.getElementById('tabStudent');
+        const tabTeacher = document.getElementById('tabTeacher');
+        const studentFields = document.getElementById('studentFields');
+        const teacherFields = document.getElementById('teacherFields');
+        const roleInput = document.getElementById('roleInput');
+
+        function setRole(role) {
+            roleInput.value = role;
+            if (role === 'teacher') {
+                tabTeacher.classList.add('active');
+                tabStudent.classList.remove('active');
+                teacherFields.classList.remove('hidden');
+                studentFields.classList.add('hidden');
+            } else {
+                tabStudent.classList.add('active');
+                tabTeacher.classList.remove('active');
+                studentFields.classList.remove('hidden');
+                teacherFields.classList.add('hidden');
+            }
+        }
+
+        tabStudent.addEventListener('click', () => setRole('student'));
+        tabTeacher.addEventListener('click', () => setRole('teacher'));
+        setRole(roleInput.value || 'student');
+
+        const canvas = document.getElementById('neuralCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height, particles;
+        const PARTICLE_COUNT = 70, MAX_DIST = 130, SPEED = 0.35;
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function initParticles() {
+            particles = Array.from({ length: PARTICLE_COUNT }, () => ({
+                x: Math.random() * width, y: Math.random() * height,
+                vx: (Math.random() - 0.5) * SPEED, vy: (Math.random() - 0.5) * SPEED,
+            }));
+        }
+        initParticles();
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        function drawFrame() {
+            ctx.clearRect(0, 0, width, height);
+            for (const p of particles) {
+                if (!prefersReducedMotion) {
+                    p.x += p.vx; p.y += p.vy;
+                    if (p.x < 0 || p.x > width) p.vx *= -1;
+                    if (p.y < 0 || p.y > height) p.vy *= -1;
+                }
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255,255,255,0.65)';
+                ctx.fill();
+            }
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const a = particles[i], b = particles[j];
+                    const dx = a.x - b.x, dy = a.y - b.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < MAX_DIST) {
+                        ctx.beginPath();
+                        ctx.moveTo(a.x, a.y);
+                        ctx.lineTo(b.x, b.y);
+                        ctx.strokeStyle = `rgba(255,255,255,${0.25 * (1 - dist / MAX_DIST)})`;
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+                    }
+                }
+            }
+            if (!prefersReducedMotion) requestAnimationFrame(drawFrame);
+        }
+        drawFrame();
+    </script>
+</body>
+</html>

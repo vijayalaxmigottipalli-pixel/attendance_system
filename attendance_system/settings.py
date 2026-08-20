@@ -25,27 +25,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 # Locally, if SECRET_KEY isn't set as an env var, falls back to the dev key below.
 # On Render, set SECRET_KEY as an environment variable to a real random value.
-SECRET_KEY = os.environ.get(
-    "SECRET_KEY",
-    "django-insecure-=w%#6g34a*ql_l(u0-#@=%=y52@^qgnr1*lxirp6fnk42#kt8&",
-)
+SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-local-development-key")
 
-# SECURITY WARNING: don't run with debug turned on in production!
-# Locally this defaults to True. On Render, set DEBUG=False as an env var.
 DEBUG = os.environ.get("DEBUG", "True") == "True"
 
-# Comma-separated list of allowed hosts, e.g. "myapp.onrender.com,127.0.0.1"
-# set as an env var on Render. Locally falls back to allowing everything on
-# localhost/127.0.0.1.
 ALLOWED_HOSTS = [
-    h.strip() for h in os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if h.strip()
+    h.strip()
+    for h in os.environ.get(
+        "ALLOWED_HOSTS",
+        "127.0.0.1,localhost"
+    ).split(",")
+    if h.strip()
 ]
-
 # Render sets this automatically for the service's own hostname — pick it up
 # so you don't have to hardcode the onrender.com URL yourself.
-RENDER_EXTERNAL_HOSTNAME = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
-if RENDER_EXTERNAL_HOSTNAME:
-    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+
 
 
 # Application definition
@@ -149,6 +143,7 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+LOGIN_URL = 'login'
 
 
 # Default primary key field type

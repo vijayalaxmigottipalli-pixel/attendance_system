@@ -6,15 +6,8 @@
     <title>Attendance Report</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @keyframes gradientShift {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
         body {
-            background: linear-gradient(-45deg, #4c1d95, #7e22ce, #db2777, #f97316);
-            background-size: 400% 400%;
-            animation: gradientShift 18s ease infinite;
+            background: #0f172a;
             min-height: 100vh;
         }
         @keyframes rise {
@@ -22,17 +15,11 @@
             to   { opacity: 1; transform: translateY(0); }
         }
         .fade-in { animation: rise 0.5s ease forwards; }
-        @keyframes cardGlow {
-            0%, 100% {
-                box-shadow: 0 0 30px 4px rgba(124, 58, 237, 0.45),
-                            0 0 60px 10px rgba(219, 39, 119, 0.25);
-            }
-            50% {
-                box-shadow: 0 0 45px 8px rgba(249, 115, 22, 0.45),
-                            0 0 80px 16px rgba(124, 58, 237, 0.3);
-            }
+        .card-glow {
+            box-shadow:
+                0 0 35px 6px rgba(124, 58, 237, 0.35),
+                0 0 65px 12px rgba(30, 64, 175, 0.25);
         }
-        .card-glow { animation: cardGlow 6s ease-in-out infinite; }
         #neuralCanvas {
             position: fixed;
             top: 0; left: 0;
@@ -41,7 +28,24 @@
             pointer-events: none;
         }
         @media (prefers-reduced-motion: reduce) {
-            .card-glow, body { animation: none !important; }
+            .fade-in { animation: none !important; }
+        }
+        .period-card {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(129, 140, 248, 0.35);
+            box-shadow: 0 0 22px 2px rgba(99, 102, 241, 0.2);
+            transition: box-shadow 0.2s ease;
+        }
+        .period-card:hover {
+            box-shadow: 0 0 32px 5px rgba(99, 102, 241, 0.35);
+        }
+        .name-pill {
+            background: rgba(30, 41, 59, 0.9);
+            border: 1px solid rgba(129, 140, 248, 0.4);
+        }
+        .name-pill:hover {
+            background: #4f46e5;
+            border-color: #4f46e5;
         }
     </style>
 </head>
@@ -51,7 +55,12 @@
     <!-- Nav -->
     <nav class="bg-gray-900/80 backdrop-blur sticky top-0 z-10 relative">
         <div class="max-w-4xl mx-auto px-4 sm:px-6 py-3 grid grid-cols-3 items-center">
-            <div></div>
+            <a href="{% url 'teacher_dashboard' %}" class="text-indigo-200 hover:text-white transition flex items-center gap-1 text-sm justify-self-start">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 111.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+                </svg>
+                Back
+            </a>
             <a href="/" class="text-white font-bold text-2xl sm:text-3xl tracking-tight text-center">Attendance System</a>
             <div class="flex flex-wrap justify-end gap-x-5 gap-y-1 text-sm">
                 <a href="/register/" class="text-indigo-200 hover:text-white transition">Register</a>
@@ -62,91 +71,118 @@
     </nav>
 
     <div class="max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-14 relative z-10">
-        <div class="card-glow bg-white/25 backdrop-blur-xl border border-white/40 rounded-2xl p-6 sm:p-10 fade-in">
+        <div class="card-glow bg-white/10 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-10 fade-in">
 
             <h1 class="text-2xl sm:text-3xl font-bold text-white mb-6">Attendance Report</h1>
 
             <form method="get" class="flex flex-wrap items-center gap-3 mb-6">
                 <input type="date" name="date" value="{{ selected_date|date:'Y-m-d' }}"
-                       class="px-4 py-2 rounded-lg bg-white/70 text-gray-900 border border-white/50 focus:outline-none focus:ring-2 focus:ring-white/70 text-sm">
+                       class="px-4 py-2 rounded-lg bg-gray-800 text-white border-2 border-gray-600 focus:outline-none focus:ring-2 focus:ring-white/70 text-sm">
                 <button type="submit"
                         class="bg-white text-indigo-700 font-semibold px-5 py-2 rounded-lg text-sm hover:bg-indigo-50 transition shadow-md hover:shadow-lg">
                     View
                 </button>
             </form>
 
-            <div class="grid grid-cols-3 gap-3 mb-8">
-                <div class="bg-white/40 backdrop-blur-md rounded-xl p-4 text-center">
-                    <div class="text-2xl sm:text-3xl font-bold text-gray-800">{{ total_count }}</div>
-                    <div class="text-xs text-gray-600 mt-1">Total Students</div>
-                </div>
-                <div class="bg-white/40 backdrop-blur-md rounded-xl p-4 text-center">
-                    <div class="text-2xl sm:text-3xl font-bold text-green-700">{{ present_count }}</div>
-                    <div class="text-xs text-gray-600 mt-1">Present</div>
-                </div>
-                <div class="bg-white/40 backdrop-blur-md rounded-xl p-4 text-center">
-                    <div class="text-2xl sm:text-3xl font-bold text-red-700">{{ absent_count }}</div>
-                    <div class="text-xs text-gray-600 mt-1">Absent</div>
-                </div>
-            </div>
+            <p class="text-white/80 text-sm mb-8">
+                {{ total_count }} student{{ total_count|pluralize }} registered
+            </p>
 
-            <!-- Desktop/tablet table -->
-            <div class="hidden sm:block border border-white/30 rounded-xl overflow-hidden bg-white/40 backdrop-blur-md">
-                <table class="w-full text-sm">
-                    <thead class="bg-white/30 text-indigo-900 uppercase text-xs">
-                        <tr>
-                            <th class="text-left px-4 py-3">Roll No.</th>
-                            <th class="text-left px-4 py-3">Name</th>
-                            <th class="text-left px-4 py-3">Status</th>
-                            <th class="text-left px-4 py-3">Time</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in rows %}
-                        <tr class="border-t border-white/20 hover:bg-white/30 transition">
-                            <td class="px-4 py-3 text-gray-700">{{ row.student.roll_number }}</td>
-                            <td class="px-4 py-3 font-medium text-gray-900">{{ row.student.name }}</td>
-                            <td class="px-4 py-3">
-                                {% if row.present %}
-                                    <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">Present</span>
-                                {% else %}
-                                    <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">Absent</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-4 py-3 text-gray-700">{{ row.time|default:"—" }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="4" class="px-4 py-8 text-center text-gray-600">No students registered yet.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+            {% if periods %}
+                <div class="space-y-6">
+                    {% for period in periods %}
+                    <div class="period-card backdrop-blur-md rounded-xl overflow-hidden">
 
-            <!-- Mobile stacked cards -->
-            <div class="sm:hidden space-y-3">
-                {% for row in rows %}
-                <div class="bg-white/40 backdrop-blur-md border border-white/30 rounded-xl p-4">
-                    <div class="flex justify-between items-center mb-1">
-                        <span class="font-semibold text-gray-900">{{ row.student.name }}</span>
-                        <span class="text-xs text-gray-600">#{{ row.student.roll_number }}</span>
+                        <!-- Period header -->
+                        <div class="px-4 sm:px-5 py-4 bg-slate-900/60 border-b border-indigo-400/20">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                    <p class="text-white font-bold text-lg">
+                                        {{ period.session.class_name }}{% if period.session.subject %} — {{ period.session.subject }}{% endif %}
+                                    </p>
+                                    <p class="text-white/60 text-xs mt-0.5">
+                                        {% if period.session.room %}{{ period.session.room }} · {% endif %}
+                                        Started {{ period.session.started_at|date:"h:i A" }}
+                                        {% if not period.session.is_active %} · Ended{% endif %}
+                                    </p>
+                                </div>
+                                <div class="flex gap-2 text-xs">
+                                    <span class="px-3 py-1 rounded-full bg-green-500/20 text-green-300 font-semibold border border-green-400/30">
+                                        {{ period.present_count }} Present
+                                    </span>
+                                    <span class="px-3 py-1 rounded-full bg-red-500/20 text-red-300 font-semibold border border-red-400/30">
+                                        {{ period.absent_count }} Absent
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Desktop/tablet table -->
+                        <div class="hidden sm:block">
+                            <table class="w-full text-sm">
+                                <thead class="bg-slate-900/60 text-indigo-200 uppercase text-xs">
+                                    <tr>
+                                        <th class="text-left px-4 py-2.5">Roll No.</th>
+                                        <th class="text-left px-4 py-2.5">Name</th>
+                                        <th class="text-left px-4 py-2.5">Status</th>
+                                        <th class="text-left px-4 py-2.5">Time</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in period.rows %}
+                                    <tr class="border-t border-white/10 hover:bg-white/5 transition">
+                                        <td class="px-4 py-2.5 text-white/70">{{ row.student.roll_number }}</td>
+                                        <td class="px-4 py-2.5">
+                                            <a href="{% url 'student_profile' row.student.id %}"
+                                               class="name-pill inline-block px-3 py-1.5 rounded-lg text-sm font-semibold text-indigo-200 hover:text-white transition">
+                                                {{ row.student.name }}
+                                            </a>
+                                        </td>
+                                        <td class="px-4 py-2.5">
+                                            {% if row.present %}
+                                                <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-green-500/20 text-green-300 border border-green-400/30">Present</span>
+                                            {% else %}
+                                                <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-red-500/20 text-red-300 border border-red-400/30">Absent</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="px-4 py-2.5 text-white/70">{{ row.time|default:"—" }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Mobile stacked cards -->
+                        <div class="sm:hidden divide-y divide-white/10">
+                            {% for row in period.rows %}
+                            <div class="p-4">
+                                <div class="flex justify-between items-center mb-1">
+                                    <a href="{% url 'student_profile' row.student.id %}"
+                                       class="name-pill inline-block px-3 py-1.5 rounded-lg text-sm font-semibold text-indigo-200 hover:text-white transition">
+                                        {{ row.student.name }}
+                                    </a>
+                                    <span class="text-xs text-white/50">#{{ row.student.roll_number }}</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    {% if row.present %}
+                                        <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-green-500/20 text-green-300 border border-green-400/30">Present</span>
+                                    {% else %}
+                                        <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-red-500/20 text-red-300 border border-red-400/30">Absent</span>
+                                    {% endif %}
+                                    <span class="text-xs text-white/50">{{ row.time|default:"—" }}</span>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
                     </div>
-                    <div class="flex justify-between items-center">
-                        {% if row.present %}
-                            <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">Present</span>
-                        {% else %}
-                            <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">Absent</span>
-                        {% endif %}
-                        <span class="text-xs text-gray-600">{{ row.time|default:"—" }}</span>
-                    </div>
+                    {% endfor %}
                 </div>
-                {% empty %}
-                <div class="text-center text-indigo-50 py-8 border border-white/30 bg-white/20 rounded-xl">
-                    No students registered yet.
+            {% else %}
+                <div class="period-card text-center text-indigo-50 py-10 rounded-xl">
+                    No class periods were started on this date.
                 </div>
-                {% endfor %}
-            </div>
+            {% endif %}
 
         </div>
     </div>
