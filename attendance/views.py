@@ -565,10 +565,10 @@ def mark_attendance(request):
         })
 
         except Exception as e:
-        print("========== MARK ATTENDANCE ERROR ==========")
-        print(str(e))
-        traceback.print_exc()
-        print("===========================================")
+              print("========== MARK ATTENDANCE ERROR ==========")
+              print(str(e))
+              traceback.print_exc()
+              print("===========================================")
 
         return JsonResponse({
             "status": "error",
