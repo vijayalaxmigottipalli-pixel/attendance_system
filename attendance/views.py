@@ -1,7 +1,6 @@
 import os
 import base64
 import json
-import traceback
 from datetime import datetime, timedelta
 
 import cv2
@@ -565,15 +564,8 @@ def mark_attendance(request):
         })
 
     except Exception as e:
-        print("========== MARK ATTENDANCE ERROR ==========")
-        print(str(e))
-        traceback.print_exc()
-        print("===========================================")
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)
 
-        return JsonResponse({
-            "status": "error",
-            "message": str(e)
-        }, status=500)
 
 @login_required
 def attendance_report(request):
