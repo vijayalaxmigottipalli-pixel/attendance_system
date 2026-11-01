@@ -21,6 +21,7 @@ from django.contrib.auth.hashers import check_password
 
 
 
+
 from .models import Student, AttendanceRecord, ClassSession
 
 
@@ -874,3 +875,6 @@ def end_session(request):
             is_active=True
         ).update(is_active=False)
     return redirect("teacher_dashboard")
+
+def landing(request):
+    return render(request, 'attendance/landing.html')

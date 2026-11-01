@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Attendance System</title>
+    <style>
+        :root {
+            --header: #0f172a;
+            --card: #111827;
+            --glow: rgba(99, 102, 241, 0.55);
+            --text: #ffffff;
+            --muted: #b8c0e0;
+            --btn-text: #3b1fa8;
+            --grey: #4b5563;
+            --grey-hover: #5b6573;
+            --accent: #7dd3c8;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html, body { min-height: 100%; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
+            color: var(--text);
+            background: linear-gradient(160deg, #141a45 0%, #1b1f55 55%, #1a1b4b 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        #network {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        .topbar {
+            position: relative;
+            z-index: 2;
+            background: var(--header);
+            text-align: center;
+            padding: 18px 16px;
+            font-size: 2.2rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+
+        .stage {
+            position: relative;
+            z-index: 1;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 660px;
+            background: var(--card);
+            border-radius: 24px;
+            padding: 48px 48px 44px;
+            text-align: center;
+            box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.25),
+                        0 0 90px var(--glow),
+                        0 30px 70px rgba(0, 0, 0, 0.5);
+        }
+
+        .icon {
+            width: 54px;
+            height: 54px;
+            margin: 0 auto 16px;
+            color: var(--accent);
+        }
+
+        h1 {
+            font-size: 2.4rem;
+            font-weight: 700;
+            line-height: 1.15;
+        }
+
+        .tagline {
+            margin-top: 10px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .text {
+            margin: 12px auto 32px;
+            max-width: 38ch;
+            font-size: 1rem;
+            line-height: 1.55;
+            color: var(--muted);
+        }
+
+        .actions {
+            display: flex;
+            gap: 14px;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .btn {
+            display: block;
+            flex: 1;
+            height: 48px;
+            line-height: 48px;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            text-decoration: none;
+            text-align: center;
+            cursor: pointer;
+            transition: background 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.15s ease;
+        }
+
+        .btn-login {
+            background: #ffffff;
+            color: var(--btn-text);
+        }
+
+        .btn-register {
+            background: var(--grey);
+            color: #ffffff;
+        }
+
+        .btn-login:hover,
+        .btn-register:hover {
+            box-shadow: 0 0 0 3px #a5b4fc, 0 0 28px rgba(129, 140, 248, 0.75);
+        }
+
+        /* while the button is being clicked, it turns white */
+        .btn-login:active,
+        .btn-register:active {
+            background: #ffffff;
+            color: var(--btn-text);
+            transform: translateY(1px);
+        }
+
+        .btn:focus-visible {
+            outline: 3px solid #a5b4fc;
+            outline-offset: 3px;
+        }
+
+        @media (max-width: 560px) {
+            .topbar { font-size: 1.6rem; padding: 14px 12px; }
+            .card { padding: 34px 22px 30px; border-radius: 20px; }
+            h1 { font-size: 1.8rem; }
+            .btn { height: 46px; line-height: 46px; }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="network" aria-hidden="true"></canvas>
+
+    <header class="topbar">Attendance System</header>
+
+    <main class="stage">
+        <section class="card">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 8V6a2 2 0 0 1 2-2h2"/>
+                <path d="M16 4h2a2 2 0 0 1 2 2v2"/>
+                <path d="M20 16v2a2 2 0 0 1-2 2h-2"/>
+                <path d="M8 20H6a2 2 0 0 1-2-2v-2"/>
+                <path d="M9 10v1"/>
+                <path d="M15 10v1"/>
+                <path d="M9 15c.8.9 1.8 1.4 3 1.4s2.2-.5 3-1.4"/>
+            </svg>
+
+            <h1>Welcome!</h1>
+            <p class="tagline">Face recognition based attendance management</p>
+            <p class="text">Manage your attendance securely and easily using face recognition.</p>
+
+            <div class="actions">
+                <a class="btn btn-login" href="{% url 'login' %}">Log In</a>
+                <a class="btn btn-register" href="{% url 'register' %}">Register</a>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // Background: drifting dots joined by thin lines (same look as the login page).
+        (function () {
+            const canvas = document.getElementById('network');
+            const ctx = canvas.getContext('2d');
+            const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const MAX_DIST = 150;
+
+            let w = 0, h = 0, dpr = 1, dots = [];
+
+            function resize() {
+                dpr = Math.min(window.devicePixelRatio || 1, 2);
+                w = window.innerWidth;
+                h = window.innerHeight;
+                canvas.width = w * dpr;
+                canvas.height = h * dpr;
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+                const count = Math.max(30, Math.min(90, Math.round((w * h) / 22000)));
+                dots = [];
+                for (let i = 0; i < count; i++) {
+                    dots.push({
+                        x: Math.random() * w,
+                        y: Math.random() * h,
+                        vx: (Math.random() - 0.5) * 0.35,
+                        vy: (Math.random() - 0.5) * 0.35,
+                        r: 1.4 + Math.random() * 1.2
+                    });
+                }
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, w, h);
+
+                for (let i = 0; i < dots.length; i++) {
+                    for (let j = i + 1; j < dots.length; j++) {
+                        const dx = dots[i].x - dots[j].x;
+                        const dy = dots[i].y - dots[j].y;
+                        const d = Math.sqrt(dx * dx + dy * dy);
+                        if (d < MAX_DIST) {
+                            ctx.strokeStyle = 'rgba(255,255,255,' + (0.22 * (1 - d / MAX_DIST)) + ')';
+                            ctx.lineWidth = 1;
+                            ctx.beginPath();
+                            ctx.moveTo(dots[i].x, dots[i].y);
+                            ctx.lineTo(dots[j].x, dots[j].y);
+                            ctx.stroke();
+                        }
+                    }
+                }
+
+                ctx.fillStyle = 'rgba(255,255,255,0.9)';
+                for (const p of dots) {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            function tick() {
+                for (const p of dots) {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    if (p.x < 0 || p.x > w) p.vx *= -1;
+                    if (p.y < 0 || p.y > h) p.vy *= -1;
+                }
+                draw();
+                requestAnimationFrame(tick);
+            }
+
+            window.addEventListener('resize', function () {
+                resize();
+                if (reduceMotion) draw();
+            });
+
+            resize();
+            if (reduceMotion) { draw(); } else { requestAnimationFrame(tick); }
+        })();
+    </script>
+
+</body>
+</html>
